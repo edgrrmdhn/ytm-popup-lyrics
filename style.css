@@ -1,0 +1,1151 @@
+/* Sembunyikan tombol shuffle bawaan YT Music di player bar. */
+ytmusic-player-bar [aria-label*="shuffle" i],
+ytmusic-player-bar [title*="shuffle" i] {
+  display: none !important;
+}
+
+/* Tombol lirik, dibuat menyatu dengan tombol kontrol asli YT Music
+   (volume/repeat) — flat, tanpa background lingkaran permanen,
+   cuma highlight tipis saat hover, sama seperti tombol bawaan YouTube. */
+.ytm-lyrics-native-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 2px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.ytm-lyrics-native-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.ytm-lyrics-native-btn.active {
+  color: #fff;
+}
+
+.ytm-lyrics-native-btn svg {
+  display: block;
+}
+
+/* Panel lirik: dibuat flat & ringan (tanpa blur, shadow minimal, sudut kecil)
+   supaya nggak berat di GPU/compositor. */
+#ytm-lyrics-panel,
+#ytm-lyrics-panel * {
+  box-sizing: border-box;
+}
+
+#ytm-lyrics-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 96px;
+  width: 340px;
+  max-height: 55vh;
+  background: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: Roboto, Arial, sans-serif;
+  --ytm-lyrics-scale: 1;
+}
+
+#ytm-lyrics-panel.ytm-lyrics-hidden {
+  display: none;
+}
+
+#ytm-lyrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: calc(13px * var(--ytm-lyrics-scale, 1));
+  font-weight: 500;
+  gap: 6px;
+}
+
+#ytm-lyrics-header-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ytm-lyrics-settings-back {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  padding: 0;
+}
+
+#ytm-lyrics-settings-back:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+#ytm-lyrics-settings-back svg {
+  display: block;
+}
+
+#ytm-lyrics-settings-view {
+  padding: 18px 16px 24px;
+  text-align: left;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#ytm-lyrics-settings-view::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#ytm-lyrics-settings-view.ytm-lyrics-hidden {
+  display: none;
+}
+
+.ytm-settings-section {
+  margin-bottom: 22px;
+}
+
+.ytm-settings-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 0 0 22px;
+}
+
+.ytm-settings-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 6px;
+}
+
+.ytm-lyric-line ruby {
+  ruby-position: over;
+}
+
+.ytm-lyric-line rt {
+  font-size: 0.55em;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ytm-lyric-line.active rt {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ytm-setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0 0 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ytm-setting-row input[type="checkbox"] {
+  flex-shrink: 0;
+}
+
+.ytm-setting-row-toggle {
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+/* ---------- Toggle switch modern (pengganti checkbox default browser) ----------
+   Checkbox aslinya tetap ada di DOM (disembunyikan visual, bukan
+   display:none) supaya keyboard/screen-reader tetap bisa pakai, cuma
+   tampilannya diganti jadi track+thumb ala iOS/modern UI. */
+.ytm-toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.ytm-toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.ytm-toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: background-color 0.15s ease;
+  pointer-events: none;
+}
+
+.ytm-toggle-slider::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s ease;
+}
+
+.ytm-toggle-switch input:checked + .ytm-toggle-slider {
+  background: #3ea6ff;
+}
+
+.ytm-toggle-switch input:checked + .ytm-toggle-slider::before {
+  transform: translateX(14px);
+}
+
+.ytm-toggle-switch input:focus-visible + .ytm-toggle-slider {
+  outline: 2px solid #3ea6ff;
+  outline-offset: 2px;
+}
+
+/* ---------- Lyric Source Priority list ---------- */
+.ytm-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ytm-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 10px;
+  transition: opacity 0.15s ease;
+}
+
+.ytm-source-row-dragging {
+  opacity: 0.35;
+}
+
+.ytm-source-row-disabled {
+  opacity: 0.5;
+}
+
+.ytm-source-drag-handle {
+  cursor: grab;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+  user-select: none;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+}
+
+.ytm-source-drag-handle:active {
+  cursor: grabbing;
+}
+
+.ytm-source-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ytm-source-name {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-setting-row-column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  cursor: default;
+}
+
+.ytm-setting-row-column input[type="text"] {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+.ytm-setting-row-column input[type="text"]:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.ytm-settings-hint {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 10px;
+  text-align: left;
+}
+
+.ytm-settings-hint a {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ytm-settings-empty {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  margin: 0;
+}
+
+#ytm-lyrics-body {
+  /* Padding kiri-kanan disamakan dengan padding kiri-kanan header/judul
+     lagu (#ytm-lyrics-header pakai 10px 12px) supaya teks lirik dan judul
+     rata di garis yang sama. */
+  padding: 18px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#ytm-lyrics-body::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+#ytm-lyrics-lines {
+  will-change: transform;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  padding-bottom: 115px;
+}
+
+#ytm-lyrics-status {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: calc(13px * var(--ytm-lyrics-scale, 1));
+  padding: 8px 0;
+}
+
+.ytm-lyric-line {
+  font-size: calc(15px * var(--ytm-lyrics-scale, 1));
+  line-height: 1.6;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.618em 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0.3;
+  transition: opacity 0.35s ease, color 0.35s ease, text-shadow 0.35s ease;
+  will-change: opacity;
+}
+
+.ytm-lyric-line.past {
+  opacity: 0.3;
+}
+
+.ytm-lyric-line:hover {
+  opacity: 0.6;
+}
+
+.ytm-lyric-line.active {
+  color: #fff;
+  font-weight: 600;
+  opacity: 1;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.4), 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.ytm-lyric-word {
+  display: inline-block;
+  white-space: pre;
+}
+
+.ytm-lyric-word:not(:last-child) {
+  margin-right: 0.25em;
+}
+
+/* Suku kata di baris yang tidak aktif harus mengikuti opacity seragam dari baris induknya */
+.ytm-lyric-line:not(.active) .ytm-lyric-word {
+  opacity: 1;
+}
+
+/* Hanya baris aktif yang menampilkan animasi per suku kata (karaoke) */
+.ytm-lyric-line.active .ytm-lyric-word {
+  opacity: 0.5;
+  transition: opacity 0.15s ease-out;
+}
+
+.ytm-lyric-line.active .ytm-lyric-word.active-word {
+  opacity: 1;
+}
+
+.ytm-lyric-line.ytm-lyric-line-plain {
+  opacity: 1 !important;
+  cursor: default;
+}
+
+.ytm-lyric-plain {
+  white-space: pre-line;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: calc(14px * var(--ytm-lyrics-scale, 1));
+  line-height: 1.7;
+}
+
+#ytm-lyrics-source {
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Info sumber lirik: teksnya ganti-ganti sesuai source yang dipakai untuk
+   lagu yang sedang tampil (lihat setSource() di content.js), jadi selalu
+   mencerminkan sumber aktual, bukan teks statis. */
+#ytm-lyrics-source .ytm-lyrics-source-label {
+  display: inline-block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 4px 10px;
+  text-decoration: none;
+}
+
+#ytm-lyrics-source a.ytm-lyrics-source-label:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+#ytm-lyrics-source.ytm-lyrics-hidden {
+  display: none;
+}
+
+/* Bar kontrol pemutaran di bagian bawah panel: tersembunyi secara default,
+   cuma muncul (fade-in) saat kursor hover di area bawah panel. Gradient
+   hitam->transparan supaya ikon tetap kebaca di atas teks lirik.
+   Layout responsif: grup previous/play/next mentok kiri, volume mentok
+   kanan — supaya nggak overflow/bertabrakan saat panel/window kecil. */
+#ytm-lyrics-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: auto;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 10px 12px 10px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.75) 60%, rgba(0, 0, 0, 0) 100%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+#ytm-ctrl-buttons-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+#ytm-lyrics-controls:hover {
+  opacity: 1;
+}
+
+#ytm-ctrl-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+#ytm-ctrl-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+#ytm-ctrl-volume-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+#ytm-ctrl-scale {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+  max-width: 60px;
+  opacity: 1;
+  transform: translateX(0);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease, max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#ytm-ctrl-scale .ytm-ctrl-btn {
+  width: 22px;
+  height: 22px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#ytm-ctrl-scale .ytm-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+#ytm-ctrl-scale .ytm-ctrl-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+#ytm-ctrl-scale-plus {
+  position: relative;
+}
+
+#ytm-ctrl-scale-plus::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ytm-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ytm-ctrl-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ytm-ctrl-btn.active {
+  color: #3ea6ff;
+}
+
+.ytm-ctrl-btn:disabled {
+  color: rgba(255, 255, 255, 0.3);
+  cursor: default;
+}
+
+.ytm-ctrl-btn:disabled:hover {
+  background: transparent;
+}
+
+.ytm-ctrl-btn-main {
+  width: 50px;
+  height: 50px;
+}
+
+.ytm-ctrl-btn-small {
+  width: 42px;
+  height: 42px;
+}
+
+.ytm-ctrl-btn svg {
+  display: block;
+}
+
+/* Slider volume: diposisikan di KIRI icon volume (icon tetap di posisi
+   tetap, slider yang "keluar" ke arah kiri) dan disembunyikan secara
+   default, cuma muncul (expand) saat area icon volume di-hover. Saat
+   kursor pindah dari area wrap-nya, slider otomatis mengecil lagi dan
+   hilang.
+   !important dipakai karena CSS bawaan YouTube Music punya aturan global
+   untuk <input type="range"> yang bisa menimpa style kita (bikin thumb-nya
+   nggak bulat kalau nggak dipaksa). */
+#ytm-ctrl-volume-slider {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 0;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  outline: none !important;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-right 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  vertical-align: middle;
+}
+
+#ytm-ctrl-volume-wrap:hover #ytm-ctrl-volume-slider,
+#ytm-ctrl-volume-slider:focus-visible,
+#ytm-ctrl-volume-slider:focus,
+#ytm-ctrl-volume-slider:active,
+#ytm-ctrl-volume-wrap:focus-within #ytm-ctrl-volume-slider {
+  width: 64px;
+  margin-right: 6px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Track — bagian kiri (terisi) putih solid, bagian kanan kelabu transparan sesuai gaya YouTube Music */
+#ytm-ctrl-volume-slider::-webkit-slider-runnable-track {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px !important;
+  background: linear-gradient(to right, #fff 0%, #fff var(--ytm-volume-pct, 100%), rgba(255, 255, 255, 0.25) var(--ytm-volume-pct, 100%), rgba(255, 255, 255, 0.25) 100%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#ytm-ctrl-volume-slider::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px !important;
+  background: linear-gradient(to right, #fff 0%, #fff var(--ytm-volume-pct, 100%), rgba(255, 255, 255, 0.25) var(--ytm-volume-pct, 100%), rgba(255, 255, 255, 0.25) 100%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#ytm-ctrl-volume-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px !important;
+  background: #fff !important;
+  border: none !important;
+}
+
+/* Thumb bulat putih */
+#ytm-ctrl-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin-top: -3px;
+  cursor: pointer;
+}
+
+#ytm-ctrl-volume-slider::-moz-range-thumb {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+/* Seek / Progress bar durasi musik di bawah tombol kontrol */
+#ytm-ctrl-seek-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 4px 0 4px;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.ytm-seek-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0%;
+  transform: translate(-50%, -4px);
+  background: rgba(36, 36, 36, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 7px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 100;
+}
+
+#ytm-ctrl-seek-wrap:hover .ytm-seek-tooltip,
+#ytm-ctrl-seek-slider:active + .ytm-seek-tooltip,
+#ytm-ctrl-seek-wrap.is-scrubbing .ytm-seek-tooltip {
+  opacity: 1;
+}
+
+#ytm-ctrl-seek-slider {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  flex: 1;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: none !important;
+  outline: none !important;
+  cursor: pointer;
+  background: transparent !important;
+  box-shadow: none !important;
+  vertical-align: middle;
+}
+
+#ytm-ctrl-seek-slider::-webkit-slider-runnable-track {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px !important;
+  background: linear-gradient(to right, #fff 0%, #fff var(--ytm-seek-pct, 0%), rgba(255, 255, 255, 0.25) var(--ytm-seek-pct, 0%), rgba(255, 255, 255, 0.25) 100%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#ytm-ctrl-seek-slider::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px !important;
+  background: linear-gradient(to right, #fff 0%, #fff var(--ytm-seek-pct, 0%), rgba(255, 255, 255, 0.25) var(--ytm-seek-pct, 0%), rgba(255, 255, 255, 0.25) 100%) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#ytm-ctrl-seek-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px !important;
+  background: #fff !important;
+  border: none !important;
+}
+
+#ytm-ctrl-seek-slider::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin-top: -4px;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#ytm-ctrl-seek-slider::-moz-range-thumb {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  border: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#ytm-ctrl-seek-wrap:hover #ytm-ctrl-seek-slider::-webkit-slider-thumb,
+#ytm-ctrl-seek-wrap.is-scrubbing #ytm-ctrl-seek-slider::-webkit-slider-thumb {
+  opacity: 1;
+  transform: scale(1);
+}
+
+#ytm-ctrl-seek-wrap:hover #ytm-ctrl-seek-slider::-moz-range-thumb,
+#ytm-ctrl-seek-wrap.is-scrubbing #ytm-ctrl-seek-slider::-moz-range-thumb {
+  opacity: 1;
+  transform: scale(1);
+}
+
+#ytm-ctrl-seek-slider:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+
+#ytm-ctrl-seek-slider:active::-moz-range-thumb {
+  transform: scale(1.25);
+}
+
+/* Panel/window sempit: kecilkan sedikit ikon & padding supaya kedua grup
+   kontrol tetap muat berdampingan tanpa saling menabrak. */
+@media (max-width: 350px) {
+  #ytm-lyrics-controls {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .ytm-ctrl-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .ytm-ctrl-btn-main {
+    width: 38px;
+    height: 38px;
+  }
+
+  #ytm-ctrl-volume-wrap:hover #ytm-ctrl-volume-slider,
+  #ytm-ctrl-volume-slider:focus-visible {
+    width: 48px;
+  }
+
+  /* Kalau slider volume expand DAN window sempit, langsung full hide tombol scale geser ke kanan tanpa terpotong setengah */
+  #ytm-ctrl-right:has(#ytm-ctrl-volume-wrap:hover) #ytm-ctrl-scale,
+  #ytm-ctrl-right:has(#ytm-ctrl-volume-slider:focus-visible) #ytm-ctrl-scale {
+    transform: translateX(80px);
+    opacity: 0;
+    max-width: 0;
+    margin-left: -4px;
+    pointer-events: none;
+  }
+}
+
+/* Menu klik-kanan pada area lirik (copy lirik / settings). */
+#ytm-lyrics-contextmenu {
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 150px;
+  background: #1c1c1c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  box-sizing: border-box;
+  font-family: Roboto, Arial, sans-serif;
+}
+
+.ytm-ctxmenu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ytm-ctxmenu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* ---------- Romaji Bubble (Default Mode) ---------- */
+.ytm-lyric-line-romaji-default {
+  padding-top: 4px !important;
+  padding-bottom: 16px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.ytm-lyric-romaji-bubble {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: normal;
+  text-transform: lowercase;
+  margin-top: 2px;
+  max-width: 90%;
+  word-wrap: break-word;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.ytm-lyric-line.active .ytm-lyric-romaji-bubble {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- Modern Minimalist Select Dropdown ---------- */
+.ytm-setting-row-select {
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  cursor: default !important;
+}
+
+.ytm-setting-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: rgba(255, 255, 255, 0.08);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23ffffff'><path d='M7 10l5 5 5-5H7z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  padding: 6px 30px 6px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  backdrop-filter: blur(8px);
+}
+
+.ytm-setting-select option {
+  background-color: #212121 !important;
+  color: #fff !important;
+  padding: 8px;
+}
+
+.ytm-setting-select:hover:not(:disabled) {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.ytm-setting-select:focus-visible:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.ytm-setting-select:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  background-color: transparent;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Source Override Dropdown Wrapper Styling */
+#ytm-custom-source-wrapper {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: 152px;
+  height: 48px;
+  padding-top: 12px;
+  padding-right: 12px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  z-index: 100;
+}
+
+#ytm-custom-source-wrapper .ytm-custom-dropdown-container {
+  opacity: 0;
+  transition: opacity 0.25s ease-in-out;
+}
+
+#ytm-custom-source-wrapper:hover .ytm-custom-dropdown-container,
+#ytm-custom-source-wrapper:focus-within .ytm-custom-dropdown-container,
+#ytm-custom-source-wrapper:has(.ytm-custom-dropdown-menu:not(.ytm-lyrics-hidden)) .ytm-custom-dropdown-container {
+  opacity: 1;
+}
+
+/* Custom Dropdown Styling (Figma / Context Menu Style) */
+.ytm-custom-dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.ytm-custom-dropdown-btn {
+  background-color: rgba(255, 255, 255, 0.07);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23ffffff'><path d='M7 10l5 5 5-5H7z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px 26px 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  min-width: 110px;
+  text-align: left;
+}
+
+.ytm-custom-dropdown-btn:hover:not(.disabled) {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.ytm-custom-dropdown-btn.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* For Romaji selection dropdown inside Settings View */
+.ytm-setting-row-select .ytm-custom-dropdown-container {
+  display: inline-block;
+}
+
+.ytm-setting-row-select .ytm-custom-dropdown-btn {
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 6px 30px 6px 12px;
+  font-size: 12px;
+  min-width: 140px;
+  background-position: right 8px center;
+  background-size: 16px;
+}
+
+.ytm-custom-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 140px;
+  background: #1c1c1c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  box-sizing: border-box;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  height: auto;
+}
+
+.ytm-custom-dropdown-menu.ytm-lyrics-hidden {
+  display: none !important;
+}
+
+.ytm-custom-dropdown-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ytm-custom-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.ytm-custom-dropdown-item.selected {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* Custom Scrollbar Zone */
+#ytm-scrollbar-hover-zone {
+  position: absolute;
+  top: 45px;
+  bottom: 75px;
+  right: 0;
+  width: 30px;
+  z-index: 9998;
+  background: transparent;
+}
+
+#ytm-custom-scrollbar {
+  position: absolute;
+  top: 45px;
+  bottom: 75px;
+  right: 5px;
+  width: 6px;
+  background: transparent;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+#ytm-scrollbar-hover-zone:hover ~ #ytm-custom-scrollbar,
+#ytm-custom-scrollbar:hover,
+#ytm-custom-scrollbar.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#ytm-custom-scrollbar-thumb {
+  position: absolute;
+  width: 4px;
+  right: 1px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  transition: background 0.15s, width 0.15s;
+  cursor: pointer;
+}
+
+#ytm-custom-scrollbar:hover #ytm-custom-scrollbar-thumb,
+#ytm-custom-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.5);
+  width: 6px;
+}
+

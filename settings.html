@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <title>YT Music Lyrics Popup — Settings</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0f0f0f;
+        color: #fff;
+        font-family: Roboto, Arial, sans-serif;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 40px 20px;
+        box-sizing: border-box;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      .wrap {
+        text-align: left;
+        max-width: 420px;
+        width: 100%;
+      }
+
+      h1 {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 0 0 20px;
+      }
+
+      .section {
+        margin: 0 0 28px;
+      }
+
+      .ytm-settings-divider {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        margin: 0 0 28px;
+      }
+
+      .section-title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: rgba(255, 255, 255, 0.5);
+        margin-bottom: 8px;
+      }
+
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 14px;
+        color: rgba(255, 255, 255, 0.85);
+        margin: 0 0 16px;
+        cursor: pointer;
+      }
+
+      p.hint {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.5);
+        line-height: 1.5;
+        margin: 0 0 12px;
+      }
+
+      p.hint a {
+        color: rgba(255, 255, 255, 0.75);
+      }
+
+      p.saved {
+        font-size: 12px;
+        color: #7fd88a;
+        margin: 8px 0 0;
+        min-height: 16px;
+      }
+
+      /* ---------- Toggle switch modern ---------- */
+      .ytm-toggle-switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 34px;
+        height: 20px;
+        flex-shrink: 0;
+        cursor: pointer;
+      }
+
+      .ytm-toggle-switch input {
+        position: absolute;
+        opacity: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .ytm-toggle-slider {
+        position: absolute;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+        transition: background-color 0.15s ease;
+        pointer-events: none;
+      }
+
+      .ytm-toggle-slider::before {
+        content: "";
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+        transition: transform 0.15s ease;
+      }
+
+      .ytm-toggle-switch input:checked + .ytm-toggle-slider {
+        background: #3ea6ff;
+      }
+
+      .ytm-toggle-switch input:checked + .ytm-toggle-slider::before {
+        transform: translateX(14px);
+      }
+
+      .ytm-toggle-switch input:focus-visible + .ytm-toggle-slider {
+        outline: 2px solid #3ea6ff;
+        outline-offset: 2px;
+      }
+
+      /* ---------- Lyric Source Priority list ---------- */
+      .ytm-source-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .ytm-source-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 10px 12px;
+        transition: opacity 0.15s ease;
+      }
+
+      .ytm-source-row-dragging {
+        opacity: 0.35;
+      }
+
+      .ytm-source-row-disabled {
+        opacity: 0.5;
+      }
+
+      .ytm-source-drag-handle {
+        cursor: grab;
+        color: rgba(255, 255, 255, 0.4);
+        font-size: 16px;
+        line-height: 1;
+        padding: 2px 4px;
+        user-select: none;
+        flex-shrink: 0;
+      }
+
+      .ytm-source-drag-handle:active {
+        cursor: grabbing;
+      }
+
+      .ytm-source-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .ytm-source-name {
+        font-size: 13px;
+        color: #fff;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      /* ---------- Modern Material Select Dropdown ---------- */
+      .ytm-setting-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-color: #212121;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23c4c7c5'><path d='M7 10l5 5 5-5H7z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        padding: 8px 36px 8px 14px;
+        font-size: 13px;
+        font-family: inherit;
+        color: #e3e3e3;
+        cursor: pointer;
+        outline: none;
+        transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+        min-width: 170px;
+      }
+
+      .ytm-setting-select option {
+        background-color: #212121 !important;
+        color: #fff !important;
+      }
+
+      .ytm-setting-select:hover:not(:disabled) {
+        background-color: #282828;
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+
+      .ytm-setting-select:focus-visible:not(:disabled) {
+        border-color: #3ea6ff;
+        box-shadow: 0 0 0 2px rgba(62, 166, 255, 0.2);
+      }
+
+      .ytm-setting-select:disabled {
+        opacity: 0.38;
+        cursor: not-allowed;
+        background-color: #171717;
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Settings</h1>
+
+      <div class="section">
+        <label class="row">
+          <span>Show romaji on Japanese lyrics</span>
+          <span class="ytm-toggle-switch">
+            <input type="checkbox" id="romaji-enabled" />
+            <span class="ytm-toggle-slider"></span>
+          </span>
+        </label>
+        <label class="row" style="margin-top: 10px; cursor: default;">
+          <span>Romaji Display Mode</span>
+          <select id="romaji-mode" class="ytm-setting-select">
+            <option value="ruby">ruby text</option>
+            <option value="default">default</option>
+          </select>
+        </label>
+      </div>
+
+      <hr class="ytm-settings-divider" />
+
+      <div class="section">
+        <div class="section-title">SOURCES</div>
+        <p class="hint">Drag to reorder priority. Higher sources are tried first. Uncheck to disable.</p>
+        <div id="sources-list" class="ytm-source-list"></div>
+      </div>
+
+      <p class="saved" id="saved-msg"></p>
+    </div>
+    <script src="sources.js"></script>
+    <script src="sources-ui.js"></script>
+    <script src="settings.js"></script>
+  </body>
+</html>
