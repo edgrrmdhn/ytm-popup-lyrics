@@ -1,0 +1,13 @@
+# Folders
+.git/
+node_modules/
+.gemini/
+.agents/
+
+# Files
+.DS_Store
+*.log
+Thumbs.db
+desktop.ini
+*.tmp
+*.bak

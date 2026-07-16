@@ -1,4 +1,4 @@
-// content.js — YT Music Lyrics Popup
+﻿// content.js — YT Music Lyrics Popup
 // Jalan di music.youtube.com. Mendeteksi lagu yang sedang diputar,
 // meminta lirik ke background.js (yang fetch ke lrclib.net), lalu
 // menampilkan panel lirik yang scroll otomatis mengikuti posisi lagu.
@@ -297,7 +297,7 @@
     if (!document.getElementById("ytm-popup-injected-bridge")) {
       const bridgeScript = document.createElement("script");
       bridgeScript.id = "ytm-popup-injected-bridge";
-      bridgeScript.src = chrome.runtime.getURL("injected.js");
+      bridgeScript.src = chrome.runtime.getURL("src/injected.js");
       (document.head || document.documentElement).appendChild(bridgeScript);
     }
 
@@ -1454,7 +1454,7 @@
     // Muat ulang style.css di dalam window PiP (dokumen baru, kosong)
     const link = pipWindow.document.createElement("link");
     link.rel = "stylesheet";
-    link.href = chrome.runtime.getURL("style.css");
+    link.href = chrome.runtime.getURL("styles/style.css");
     pipWindow.document.head.appendChild(link);
     pipWindow.document.title = "Lyrics — YT Music";
 
@@ -1922,3 +1922,4 @@
   });
 
 })();
+
