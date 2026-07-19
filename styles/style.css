@@ -1149,3 +1149,57 @@ ytmusic-player-bar [title*="shuffle" i] {
   width: 6px;
 }
 
+/* Offset Lyrics Controls (Timing) */
+#ytm-ctrl-offset-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-left: 8px;
+}
+
+.ytm-ctrl-offset-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ytm-ctrl-offset-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.ytm-ctrl-offset-btn:focus {
+  outline: none;
+}
+
+#ytm-ctrl-offset-plus {
+  position: relative;
+}
+
+#ytm-ctrl-offset-plus::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+

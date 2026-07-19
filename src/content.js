@@ -1,4 +1,4 @@
-﻿// content.js — YT Music Lyrics Popup
+// content.js — YT Music Lyrics Popup
 // Jalan di music.youtube.com. Mendeteksi lagu yang sedang diputar,
 // meminta lirik ke background.js (yang fetch ke lrclib.net), lalu
 // menampilkan panel lirik yang scroll otomatis mengikuti posisi lagu.
@@ -32,6 +32,7 @@
     lastTimeUpdateSystemTime: 0,
     scrollAnimId: null,
     isUserScrolling: false,
+    lyricsOffset: 0,
   };
 
   const TEXT_SCALE_MIN = 0.7;
@@ -371,6 +372,10 @@
         <div id="ytm-ctrl-seek-wrap">
           <div id="ytm-seek-tooltip" class="ytm-seek-tooltip">0:00</div>
           <input id="ytm-ctrl-seek-slider" type="range" min="0" max="100" step="0.1" value="0" />
+          <div id="ytm-ctrl-offset-wrap">
+            <button id="ytm-ctrl-offset-minus" class="ytm-ctrl-offset-btn" type="button" title="offset lyrics timing">- 0s</button>
+            <button id="ytm-ctrl-offset-plus" class="ytm-ctrl-offset-btn" type="button" title="offset lyrics timing">+ 0s</button>
+          </div>
         </div>
       </div>
     `;
@@ -381,6 +386,7 @@
     wirePlaybackControls(panel);
     wireContextMenu(panel);
     wireRomajiSettings(panel);
+    updateOffsetUI();
     panel.querySelector("#ytm-lyrics-settings-back").addEventListener("click", () => hideSettingsView());
     STATE.panelDoc = document;
 
@@ -699,7 +705,10 @@
     const maxScroll = body.scrollHeight - body.clientHeight;
     if (maxScroll <= 0) return;
 
-    const ratio = Math.min(1, Math.max(0, currentTime / duration));
+    const offsetSec = (STATE.lyricsOffset || 0) / 1000;
+    const adjustedTime = currentTime - offsetSec;
+
+    const ratio = Math.min(1, Math.max(0, adjustedTime / duration));
     const baseScroll = ratio * maxScroll;
     const desiredScrollTop = Math.max(0, Math.min(maxScroll, baseScroll + (STATE.plainScrollOffset || 0)));
 
@@ -767,6 +776,24 @@
 
     const thumbTop = maxScrollTop > 0 ? (scrollTop / maxScrollTop) * maxTrackScroll : 0;
     thumb.style.top = `${thumbTop}px`;
+  }
+
+  function updateOffsetUI() {
+    const btnMinus = qsPanel("#ytm-ctrl-offset-minus");
+    const btnPlus = qsPanel("#ytm-ctrl-offset-plus");
+    if (!btnMinus || !btnPlus) return;
+
+    const val = STATE.lyricsOffset || 0;
+    if (val === 0) {
+      btnMinus.textContent = "- 0s";
+      btnPlus.textContent = "+ 0s";
+    } else if (val > 0) {
+      btnMinus.textContent = "- 0s";
+      btnPlus.textContent = `+ ${val / 1000}s`;
+    } else {
+      btnMinus.textContent = `- ${Math.abs(val / 1000)}s`;
+      btnPlus.textContent = "+ 0s";
+    }
   }
 
   function updateSeekUI() {
@@ -924,14 +951,19 @@
         const dur = Number(seekSlider.max) || 1;
         let timeSec = valSec;
         let leftPct = 0;
+
+        const rectSlider = seekSlider.getBoundingClientRect();
+        const rectWrap = seekWrap.getBoundingClientRect();
+        const sliderWidth = rectSlider.width;
+        const sliderLeftOffset = rectSlider.left - rectWrap.left;
+
         if (typeof valSec === "number") {
           timeSec = valSec;
-          leftPct = (valSec / dur) * 100;
+          leftPct = ((sliderLeftOffset + (valSec / dur) * sliderWidth) / (rectWrap.width || 1)) * 100;
         } else if (clientX !== undefined) {
-          const rect = seekSlider.getBoundingClientRect();
-          const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / (rect.width || 1)));
+          const ratio = Math.max(0, Math.min(1, (clientX - rectSlider.left) / (sliderWidth || 1)));
           timeSec = ratio * dur;
-          leftPct = ratio * 100;
+          leftPct = ((sliderLeftOffset + ratio * sliderWidth) / (rectWrap.width || 1)) * 100;
         }
         seekTooltip.textContent = formatTime(timeSec);
         seekTooltip.style.left = `${leftPct}%`;
@@ -968,6 +1000,38 @@
       setTextScale(TEXT_SCALE_STEP);
     });
 
+    panel.querySelector("#ytm-ctrl-offset-minus").addEventListener("click", () => {
+      STATE.lyricsOffset -= 500;
+      updateOffsetUI();
+      const video = STATE.videoEl || getVideoEl();
+      if (video) {
+        if (STATE.lines.length > 0) {
+          STATE.activeIndex = -1;
+          updateActiveLine(video.currentTime);
+        } else if (STATE.plainText) {
+          STATE.isUserScrolling = false;
+          STATE.lastPlainScrollInteraction = 0;
+          updatePlainLyricsScroll(getEstimatedTime(), video.duration, false);
+        }
+      }
+    });
+
+    panel.querySelector("#ytm-ctrl-offset-plus").addEventListener("click", () => {
+      STATE.lyricsOffset += 500;
+      updateOffsetUI();
+      const video = STATE.videoEl || getVideoEl();
+      if (video) {
+        if (STATE.lines.length > 0) {
+          STATE.activeIndex = -1;
+          updateActiveLine(video.currentTime);
+        } else if (STATE.plainText) {
+          STATE.isUserScrolling = false;
+          STATE.lastPlainScrollInteraction = 0;
+          updatePlainLyricsScroll(getEstimatedTime(), video.duration, false);
+        }
+      }
+    });
+
     const body = panel.querySelector("#ytm-lyrics-body");
     const scrollbar = panel.querySelector("#ytm-custom-scrollbar");
     const thumb = panel.querySelector("#ytm-custom-scrollbar-thumb");
@@ -977,13 +1041,25 @@
       let isDraggingThumb = false;
       let startY = 0;
       let startScrollTop = 0;
-      let scrollDebounceTimeout = null;
+      let userScrollTimeout = null;
       let hideScrollbarTimeout = null;
 
       const recordInteraction = () => {
         STATE.lastPlainScrollInteraction = Date.now();
         STATE.isUserScrolling = true;
+        
+        if (userScrollTimeout) clearTimeout(userScrollTimeout);
+        userScrollTimeout = setTimeout(() => {
+          STATE.isUserScrolling = false;
+          if (hideScrollbarTimeout) clearTimeout(hideScrollbarTimeout);
+          hideScrollbarTimeout = setTimeout(() => {
+            if (!isDraggingThumb) {
+              scrollbar.classList.remove("visible");
+            }
+          }, 800);
+        }, 150);
       };
+
       body.addEventListener("wheel", recordInteraction, { passive: true });
       body.addEventListener("touchmove", recordInteraction, { passive: true });
       body.addEventListener("pointerdown", recordInteraction, { passive: true });
@@ -991,7 +1067,6 @@
       body.addEventListener("scroll", () => {
         updateCustomScrollbar();
 
-        // Tampilkan scrollbar hanya saat manual scroll
         if (STATE.isUserScrolling) {
           scrollbar.classList.add("visible");
           if (hideScrollbarTimeout) clearTimeout(hideScrollbarTimeout);
@@ -1001,26 +1076,16 @@
             if (video && video.duration > 0) {
               const maxScroll = body.scrollHeight - body.clientHeight;
               if (maxScroll > 0) {
-                const ratio = Math.min(1, Math.max(0, video.currentTime / video.duration));
-                STATE.plainScrollOffset = body.scrollTop - (ratio * maxScroll);
+                if (body.scrollTop <= 2) {
+                  STATE.plainScrollOffset = 0;
+                } else {
+                  const ratio = Math.min(1, Math.max(0, video.currentTime / video.duration));
+                  STATE.plainScrollOffset = body.scrollTop - (ratio * maxScroll);
+                }
               }
             }
           }
         }
-
-        // Debounce untuk mendeteksi kapan scroll selesai sepenuhnya (termasuk inersia)
-        if (scrollDebounceTimeout) clearTimeout(scrollDebounceTimeout);
-        scrollDebounceTimeout = setTimeout(() => {
-          STATE.isUserScrolling = false;
-
-          // Sembunyikan setelah 800ms sejak scroll manual berhenti
-          if (hideScrollbarTimeout) clearTimeout(hideScrollbarTimeout);
-          hideScrollbarTimeout = setTimeout(() => {
-            if (!isDraggingThumb) {
-              scrollbar.classList.remove("visible");
-            }
-          }, 800);
-        }, 150);
       }, { passive: true });
 
       // Meneruskan wheel scroll dari area scrollbar ke body agar lirik tetap tergulir
@@ -1033,46 +1098,84 @@
         hoverZone.addEventListener("wheel", redirectWheel, { passive: true });
       }
 
-      // Wiring fungsionalitas drag scrollbar kustom dengan dynamic binding ke ownerDocument
-      let onMouseMove = null;
-      let onMouseUp = null;
-
-      thumb.addEventListener("mousedown", (e) => {
+      // Wiring fungsionalitas drag scrollbar kustom secara statis ke panel kontainer
+      // untuk kestabilan event di jendela Document Picture-in-Picture (PiP).
+      thumb.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
         isDraggingThumb = true;
         startY = e.clientY;
         startScrollTop = body.scrollTop;
         STATE.lastPlainScrollInteraction = Date.now();
         STATE.isUserScrolling = true;
         scrollbar.classList.add("visible");
-        e.preventDefault(); // cegah seleksi teks saat menyeret
+        
+        try {
+          thumb.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      });
 
-        const doc = thumb.ownerDocument || document;
+      thumb.addEventListener("pointermove", (e) => {
+        if (!isDraggingThumb) return;
+        STATE.lastPlainScrollInteraction = Date.now();
+        STATE.isUserScrolling = true;
 
-        onMouseMove = (moveEv) => {
-          if (!isDraggingThumb) return;
-          STATE.lastPlainScrollInteraction = Date.now();
-          STATE.isUserScrolling = true;
+        const deltaY = e.clientY - startY;
+        const trackHeight = scrollbar.clientHeight;
+        const thumbHeight = thumb.offsetHeight;
+        const maxTrackScroll = trackHeight - thumbHeight;
+        const maxScrollTop = body.scrollHeight - body.clientHeight;
 
-          const deltaY = moveEv.clientY - startY;
-          const trackHeight = scrollbar.clientHeight;
-          const thumbHeight = thumb.offsetHeight;
-          const maxTrackScroll = trackHeight - thumbHeight;
-          const maxScrollTop = body.scrollHeight - body.clientHeight;
+        const scrollDelta = maxTrackScroll > 0 ? (deltaY / maxTrackScroll) * maxScrollTop : 0;
+        body.scrollTop = startScrollTop + scrollDelta;
+      });
 
-          const scrollDelta = maxTrackScroll > 0 ? (deltaY / maxTrackScroll) * maxScrollTop : 0;
-          body.scrollTop = startScrollTop + scrollDelta;
-        };
-
-        onMouseUp = () => {
+      const stopDragging = (e) => {
+        if (isDraggingThumb) {
           isDraggingThumb = false;
           scrollbar.classList.remove("visible");
-          doc.removeEventListener("mousemove", onMouseMove);
-          doc.removeEventListener("mouseup", onMouseUp);
-        };
+          STATE.isUserScrolling = false;
+          STATE.lastPlainScrollInteraction = Date.now();
+          try {
+            thumb.releasePointerCapture(e.pointerId);
+          } catch (err) {}
+        }
+      };
 
-        doc.addEventListener("mousemove", onMouseMove);
-        doc.addEventListener("mouseup", onMouseUp);
-      });
+      thumb.addEventListener("pointerup", stopDragging);
+      thumb.addEventListener("pointercancel", stopDragging);
+
+      const handleScrollbarClick = (e) => {
+        if (e.target === thumb) return;
+
+        STATE.lastPlainScrollInteraction = Date.now();
+        STATE.isUserScrolling = true;
+        scrollbar.classList.add("visible");
+        e.preventDefault();
+
+        const rect = hoverZone ? hoverZone.getBoundingClientRect() : scrollbar.getBoundingClientRect();
+        const clickY = e.clientY - rect.top;
+        const trackHeight = hoverZone ? hoverZone.clientHeight : scrollbar.clientHeight;
+        const thumbHeight = thumb.offsetHeight;
+        const maxTrackScroll = trackHeight - thumbHeight;
+        const maxScrollTop = body.scrollHeight - body.clientHeight;
+
+        const desiredThumbTop = clickY - (thumbHeight / 2);
+        const ratio = maxTrackScroll > 0 ? Math.min(1, Math.max(0, desiredThumbTop / maxTrackScroll)) : 0;
+        
+        body.scrollTop = ratio * maxScrollTop;
+
+        isDraggingThumb = true;
+        startY = e.clientY;
+        startScrollTop = body.scrollTop;
+        try {
+          thumb.setPointerCapture(e.pointerId);
+        } catch (err) {}
+      };
+
+      if (hoverZone) {
+        hoverZone.addEventListener("pointerdown", handleScrollbarClick);
+      }
+      scrollbar.addEventListener("pointerdown", handleScrollbarClick);
     }
   }
 
@@ -1213,7 +1316,8 @@
   function seekToLine(line) {
     const video = STATE.videoEl || getVideoEl();
     if (!video || typeof line.time !== "number") return;
-    video.currentTime = line.time;
+    const offsetSec = (STATE.lyricsOffset || 0) / 1000;
+    video.currentTime = Math.max(0, Math.min(video.duration || Infinity, line.time + offsetSec));
     if (video.paused) {
       video.play().catch(() => {});
     }
@@ -1223,20 +1327,23 @@
     const lines = STATE.lines;
     if (lines.length === 0) return;
 
+    const offsetSec = (STATE.lyricsOffset || 0) / 1000;
+    const adjustedTime = currentTime - offsetSec;
+
     // Playback normalnya maju terus, jadi kalau baris aktif saat ini masih
-    // valid (waktunya belum lewat currentTime), lanjutkan scan dari situ
+    // valid (waktunya belum lewat adjustedTime), lanjutkan scan dari situ
     // saja alih-alih dari awal — cuma perlu geser beberapa baris per tick,
     // bukan re-scan semua baris. Kalau ada seek mundur (waktu baris aktif
-    // sekarang sudah "di masa depan" relatif ke currentTime), baru scan
+    // sekarang sudah "di masa depan" relatif ke adjustedTime), baru scan
     // ulang dari awal.
     const start =
-      STATE.activeIndex >= 0 && lines[STATE.activeIndex].time <= currentTime + 0.05
+      STATE.activeIndex >= 0 && lines[STATE.activeIndex].time <= adjustedTime + 0.05
         ? STATE.activeIndex
         : 0;
 
     let idx = start === 0 ? -1 : start;
     for (let i = start; i < lines.length; i++) {
-      if (lines[i].time <= currentTime + 0.05) {
+      if (lines[i].time <= adjustedTime + 0.05) {
         idx = i;
       } else {
         break;
@@ -1300,7 +1407,7 @@
       const wordSpans = STATE.activeLineEl.querySelectorAll(".ytm-lyric-word");
       for (const span of wordSpans) {
         const wTime = parseFloat(span.dataset.time);
-        if (currentTime >= wTime) {
+        if (adjustedTime >= wTime) {
           span.classList.add("active-word");
         } else {
           span.classList.remove("active-word");
@@ -1339,6 +1446,8 @@
     STATE.plainText = null;
     STATE.activeIndex = -1;
     STATE.plainScrollOffset = 0;
+    STATE.lyricsOffset = 0;
+    updateOffsetUI();
     setSource(null);
     clearLyricsLines();
     setStatus("Searching for lyrics...");
@@ -1488,6 +1597,7 @@
     panel.style.borderRadius = "0";
     pipWindow.document.body.appendChild(panel);
     STATE.panelDoc = pipWindow.document;
+    updateOffsetUI();
 
     STATE.panelVisible = true;
     const btn = document.getElementById("ytm-lyrics-toggle");
@@ -1506,6 +1616,7 @@
       panel.classList.add("ytm-lyrics-hidden");
       document.body.appendChild(panel);
       STATE.panelDoc = document;
+      updateOffsetUI();
       STATE.pipWindow = null;
       STATE.panelVisible = false;
 

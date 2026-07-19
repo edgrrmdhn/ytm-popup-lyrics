@@ -720,7 +720,11 @@ function segmentJapaneseWords(text) {
 }
 
 function looksLikeRomaji(str) {
-  return typeof str === "string" && /^[A-Za-z][A-Za-z0-9 '.\-]*$/.test(str.trim());
+  if (typeof str !== "string") return false;
+  const s = str.trim();
+  if (!s || s.toLowerCase() === "ja") return false;
+  // Pastikan tidak mengandung karakter huruf Jepang (Kanji, Hiragana, Katakana)
+  return !/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(s);
 }
 
 // Respons translate_a/single itu nested array yang nggak didokumentasikan
@@ -743,56 +747,138 @@ function findRomajiInResponse(node, skipText) {
   return null;
 }
 
-async function fetchRomajiForWord(word) {
-  if (!word || !isJapaneseText(word)) return null;
-  if (romajiWordCache.has(word)) return romajiWordCache.get(word);
-  try {
-    const url = `${ROMAJI_ENDPOINT}?client=gtx&sl=ja&tl=ja&dt=rm&dt=t&q=${encodeURIComponent(word)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("bad status " + res.status);
-    const data = await res.json();
-    const romaji = findRomajiInResponse(data, word);
-    setRomajiWordCache(word, romaji);
-    return romaji;
-  } catch {
-    setRomajiWordCache(word, null);
-    return null;
-  }
-}
-
-// Batasi request paralel biar nggak nembak endpoint publiknya sekaligus
-// dalam jumlah besar (satu baris lirik bisa punya belasan kata unik).
-async function mapWithConcurrency(items, limit, fn) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const idx = cursor++;
-      results[idx] = await fn(items[idx], idx);
+function getRomajiFromResponse(data) {
+  if (!data || !Array.isArray(data[0])) return null;
+  const parts = [];
+  for (const seg of data[0]) {
+    if (Array.isArray(seg) && typeof seg[3] === "string") {
+      parts.push(seg[3].trim());
     }
   }
-  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, worker);
-  await Promise.all(workers);
-  return results;
+  if (parts.length > 0) {
+    return parts.join(" ");
+  }
+  return null;
 }
 
-async function fetchRomajiForLine(text) {
+async function fetchRomajiForLine(text, signal) {
   if (!text) return null;
-  const words = segmentJapaneseWords(text);
-  if (words.length === 0) return null;
-  const romajis = await mapWithConcurrency(words, 4, (w) => fetchRomajiForWord(w));
-  return words.map((surface, i) => ({
-    surface,
-    romaji: romajis[i] || null,
-  }));
+  if (!isJapaneseText(text)) {
+    return [{ surface: text, romaji: null }];
+  }
+  if (romajiWordCache.has(text)) {
+    return romajiWordCache.get(text);
+  }
+
+  try {
+    const url = `${ROMAJI_ENDPOINT}?client=gtx&sl=ja&tl=ja&dt=rm&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error("bad status " + res.status);
+    const data = await res.json();
+    const romaji = findRomajiInResponse(data, text);
+    if (!romaji) {
+      const fallback = [{ surface: text, romaji: null }];
+      setRomajiWordCache(text, fallback);
+      return fallback;
+    }
+
+    // Split by spaces to keep word spacing alignment if possible
+    const jpWords = text.split(/\s+/);
+    const rmWords = romaji.split(/\s+/);
+
+    let result;
+    if (jpWords.length === rmWords.length) {
+      result = jpWords.map((surface, i) => ({
+        surface,
+        romaji: rmWords[i],
+      }));
+    } else {
+      result = [{ surface: text, romaji }];
+    }
+
+    setRomajiWordCache(text, result);
+    return result;
+  } catch (e) {
+    if (e.name === "AbortError") {
+      throw e;
+    }
+    const fallback = [{ surface: text, romaji: null }];
+    setRomajiWordCache(text, fallback);
+    return fallback;
+  }
 }
+
+let currentRomajiController = null;
 
 async function fetchRomajiBatch(lines) {
-  return mapWithConcurrency(lines, 3, (line) => fetchRomajiForLine(line));
+  if (currentRomajiController) {
+    try {
+      currentRomajiController.abort();
+    } catch (e) {}
+  }
+  currentRomajiController = new AbortController();
+  const signal = currentRomajiController.signal;
+
+  try {
+    for (let i = 0; i < lines.length; i++) {
+      if (signal.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+      const line = lines[i];
+      if (!line || !isJapaneseText(line) || romajiWordCache.has(line)) {
+        continue;
+      }
+      
+      await fetchRomajiForLine(line, signal);
+
+      // Jeda 50ms antar-request untuk mencegah burst rate-limit
+      if (i < lines.length - 1) {
+        const nextLine = lines[i + 1];
+        if (nextLine && isJapaneseText(nextLine) && !romajiWordCache.has(nextLine)) {
+          await new Promise((resolve, reject) => {
+            const onAbort = () => {
+              clearTimeout(timeoutId);
+              reject(new DOMException("Aborted", "AbortError"));
+            };
+            const timeoutId = setTimeout(() => {
+              signal.removeEventListener("abort", onAbort);
+              resolve();
+            }, 50);
+            signal.addEventListener("abort", onAbort);
+          });
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      console.error("Error fetching romaji batch:", e);
+    }
+  } finally {
+    if (currentRomajiController?.signal === signal) {
+      currentRomajiController = null;
+    }
+  }
+
+  return lines.map(line => {
+    if (!line) return null;
+    if (!isJapaneseText(line)) {
+      return [{ surface: line, romaji: null }];
+    }
+    if (romajiWordCache.has(line)) {
+      return romajiWordCache.get(line);
+    }
+    return [{ surface: line, romaji: null }];
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "FETCH_LYRICS") {
+    if (currentRomajiController) {
+      try {
+        currentRomajiController.abort();
+      } catch (e) {}
+      currentRomajiController = null;
+    }
     const payload = message.payload || {};
     if (sender && sender.tab) {
       payload.senderTabId = sender.tab.id;
